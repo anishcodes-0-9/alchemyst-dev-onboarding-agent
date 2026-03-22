@@ -1,4 +1,6 @@
-import asyncio
+from app.agent.stages.discover import run_discover
+from app.agent.stages.match import run_match
+from app.agent.stages.generate import run_generate
 
 
 class AgentLoop:
@@ -6,7 +8,6 @@ class AgentLoop:
         self.session = session
 
     async def run(self, user_message: str):
-        # store user message
         self.session["history"].append({
             "role": "user",
             "content": user_message
@@ -16,64 +17,16 @@ class AgentLoop:
             stage = self.session["stage"]
 
             if stage == "discover":
-                async for e in self._discover():
+                async for e in run_discover(self.session):
                     yield e
 
             elif stage == "match":
-                async for e in self._match():
+                async for e in run_match(self.session):
                     yield e
 
             elif stage == "generate":
-                async for e in self._generate():
+                async for e in run_generate(self.session):
                     yield e
 
             elif stage == "done":
                 break
-
-    async def _discover(self):
-        text = "What are you building?"
-
-        for ch in text:
-            yield ("token", {"text": ch})
-            await asyncio.sleep(0.01)
-
-        self.session["integration"]["useCase"] = "chatbot"
-        self.session["stage"] = "match"
-
-        yield (
-            "stage_update",
-            {
-                "stage": "match",
-                "integration": self.session["integration"]
-            }
-        )
-
-    async def _match(self):
-        self.session["integration"]["feature"] = "IntelliChat"
-        self.session["stage"] = "generate"
-
-        yield (
-            "stage_update",
-            {
-                "stage": "generate",
-                "integration": self.session["integration"]
-            }
-        )
-
-    async def _generate(self):
-        code = "print('Hello from Alchemyst')"
-
-        yield (
-            "code",
-            {
-                "snippet": code,
-                "language": "python"
-            }
-        )
-
-        self.session["stage"] = "done"
-
-        yield (
-            "done",
-            {"sessionId": self.session["id"]}
-        )

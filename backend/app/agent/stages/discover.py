@@ -2,25 +2,6 @@ import asyncio
 from app.agent.extractor import extract_use_case
 
 
-def extract_features(message: str):
-    message = message.lower()
-    features = []
-
-    if "memory" in message:
-        features.append("memory")
-
-    if "auth" in message or "authentication" in message:
-        features.append("auth")
-
-    if "embedding" in message:
-        features.append("embedding")
-
-    if "vector" in message:
-        features.append("vector_db")
-
-    return features
-
-
 async def run_discover(session):
     text = "What are you building?"
 
@@ -43,7 +24,11 @@ async def run_discover(session):
             use_case = previous_use_case
 
 #  accumulate features instead of replacing
-    updated_features = list(set(existing_features + extracted_features))
+    updated_features = existing_features.copy()
+
+    for f in extracted_features:
+        if f not in updated_features:
+            updated_features.append(f)
 
     session["integration"]["useCase"] = use_case
     session["integration"]["features"] = updated_features

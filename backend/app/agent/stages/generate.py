@@ -1,8 +1,18 @@
 async def run_generate(session):
     features = session["integration"].get("features", [])
     use_case = session["integration"].get("useCase")
+    stack = session["integration"].get("stack")
+    architecture = session["integration"].get("architecture")
 
     code_parts = []
+
+    if stack == "fastapi":
+       code_parts.append(
+"""from fastapi import FastAPI
+
+app = FastAPI()
+"""
+)
 
     # 🔹 Chatbot base
     if use_case == "chatbot":

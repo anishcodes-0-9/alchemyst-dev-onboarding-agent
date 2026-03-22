@@ -1,28 +1,16 @@
+from app.agent.matcher import match_stack_and_architecture
+
+
 async def run_match(session):
     use_case = session["integration"].get("useCase")
     features = session["integration"].get("features", [])
 
-    # ✅ INLINE matcher (no external dependency)
-    if use_case == "chatbot":
-        stack = "fastapi"
-        architecture = "modular-monolith"
+    result = match_stack_and_architecture(use_case, features)
 
-        if "auth" in features:
-            architecture = "service-oriented"
-
-    elif use_case == "rag":
-        stack = "fastapi"
-        architecture = "retrieval-system"
-
-    else:
-        stack = "fastapi"
-        architecture = "service-oriented"
-
-    session["integration"]["stack"] = stack
-
-    # 🔒 preserve architecture once set
-    if not session["integration"].get("architecture"):
-        session["integration"]["architecture"] = architecture
+    # store everything properly
+    session["integration"]["stack"] = result["stack"]
+    session["integration"]["architecture"] = result["architecture"]
+    session["integration"]["feature"] = result["feature"]
 
     session["stage"] = "generate"
 

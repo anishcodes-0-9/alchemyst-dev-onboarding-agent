@@ -31,6 +31,9 @@ async def run_discover(session):
             updated_features.append(f)
 
     session["integration"]["useCase"] = use_case
+    session["integration"]["stack"] = None
+    session["integration"]["architecture"] = None
+    session["integration"]["feature"] = None
     session["integration"]["features"] = updated_features
     session["stage"] = "match"
 

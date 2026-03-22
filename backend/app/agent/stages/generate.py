@@ -6,26 +6,55 @@ async def run_generate(session):
 
     code_parts = []
 
+    # 🔹 Base stack
     if stack == "fastapi":
-       code_parts.append(
+        code_parts.append(
 """from fastapi import FastAPI
 
 app = FastAPI()
 """
-)
+        )
 
-    # 🔹 Chatbot base
+    # 🔹 PRODUCT LAYER (based on use_case ONLY)
+
+    # Chatbot system
     if use_case == "chatbot":
         code_parts.append(
-            """def chat():
+"""# Chatbot system
+def chat():
     return "Hello! I'm your chatbot."
 """
         )
 
-    # 🔹 Memory
+    # RAG system
+    elif use_case == "rag":
+        code_parts.append(
+"""# RAG system
+context_store = []
+
+def upload_context(data):
+    context_store.append(data)
+
+def query_context():
+    return context_store
+"""
+        )
+
+    # Agent system
+    elif use_case == "agent":
+        code_parts.append(
+"""# Agent system
+def run_agent(task):
+    return f"Executing task: {task}"
+"""
+        )
+
+    # 🔹 FEATURES (COMPOSITION LAYER)
+
     if "memory" in features:
         code_parts.append(
-            """memory_store = []
+"""# Memory module
+memory_store = []
 
 def store(data):
     memory_store.append(data)
@@ -36,24 +65,25 @@ def retrieve():
 """
         )
 
-    # 🔹 Auth
     if "auth" in features:
         code_parts.append(
-            """def login(username, password):
+"""# Auth module
+def login(username, password):
     if username == "admin" and password == "admin":
         return {"token": "secure-token"}
     return {"error": "invalid credentials"}
 """
         )
 
-    # 🔹 Embeddings
     if "embedding" in features:
         code_parts.append(
-            """def embed(text):
+"""# Embedding module
+def embed(text):
     return [ord(c) for c in text]
 """
         )
 
+    # 🔹 FINAL BUILD
     final_code = "\n\n".join(code_parts)
 
     yield (

@@ -1,47 +1,55 @@
 async def run_generate(session):
-    feature = session["integration"].get("feature")
+    features = session["integration"].get("features", [])
+    use_case = session["integration"].get("useCase")
 
-    if feature == "IntelliChat":
-        code = """from fastapi import FastAPI
+    code_parts = []
 
-app = FastAPI()
-
-@app.get("/")
-def chat():
-    return {"response": "Hello! I'm your chatbot."}
+    # 🔹 Chatbot base
+    if use_case == "chatbot":
+        code_parts.append(
+            """def chat():
+    return "Hello! I'm your chatbot."
 """
+        )
 
-    elif feature == "ContextAPI":
-        code = """from fastapi import FastAPI
+    # 🔹 Memory
+    if "memory" in features:
+        code_parts.append(
+            """memory_store = []
 
-app = FastAPI()
-
-memory_store = []
-
-@app.post("/store")
-def store(data: str):
+def store(data):
     memory_store.append(data)
     return {"status": "stored"}
 
-@app.get("/retrieve")
 def retrieve():
     return {"data": memory_store}
 """
+        )
 
-    elif feature == "ContextRouter":
-        code = """def route(query):
-    if "code" in query:
-        return "Code Model"
-    return "General Model"
+    # 🔹 Auth
+    if "auth" in features:
+        code_parts.append(
+            """def login(username, password):
+    if username == "admin" and password == "admin":
+        return {"token": "secure-token"}
+    return {"error": "invalid credentials"}
 """
+        )
 
-    else:
-        code = "# No suitable integration found"
+    # 🔹 Embeddings
+    if "embedding" in features:
+        code_parts.append(
+            """def embed(text):
+    return [ord(c) for c in text]
+"""
+        )
+
+    final_code = "\n\n".join(code_parts)
 
     yield (
         "code",
         {
-            "snippet": code,
+            "snippet": final_code,
             "language": "python"
         }
     )

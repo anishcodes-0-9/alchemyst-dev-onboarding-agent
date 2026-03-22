@@ -8,11 +8,17 @@ class AgentLoop:
         self.session = session
 
     async def run(self, user_message: str):
+        # reset stage if previous run completed
+        if self.session.get("stage") == "done":
+            self.session["stage"] = "discover"
+
+        # append message
         self.session["history"].append({
             "role": "user",
             "content": user_message
         })
 
+        #  main loop
         while True:
             stage = self.session["stage"]
 

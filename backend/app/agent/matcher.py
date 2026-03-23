@@ -1,25 +1,28 @@
 def match_stack_and_architecture(use_case, features):
     stack = "fastapi"
     architecture = "modular-monolith"
-    feature = None  # ✅ NEW
+    feature = None
 
-    # 🔹 Use case based decisions
     if use_case == "rag":
         stack = "fastapi"
         architecture = "retrieval-system"
-        feature = "ContextAPI"  # ✅ NEW
+        feature = "ContextAPI"
 
     elif use_case == "agent":
         stack = "fastapi"
         architecture = "agentic-workflow"
-        feature = "ContextAPI"  # ✅ NEW
+        feature = "ContextAPI"
+
+    elif use_case == "openai_replace":
+        stack = "fastapi"
+        architecture = "proxy-layer"
+        feature = "ContextRouter"
 
     elif use_case == "chatbot":
         stack = "fastapi"
         architecture = "modular-monolith"
-        feature = "IntelliChat"  # ✅ NEW
+        feature = "IntelliChat"
 
-    # 🔹 Feature-based overrides (keep your logic)
     if "embedding" in features:
         architecture = "retrieval-system"
 
@@ -29,5 +32,5 @@ def match_stack_and_architecture(use_case, features):
     return {
         "stack": stack,
         "architecture": architecture,
-        "feature": feature  # ✅ NEW (CRITICAL)
+        "feature": feature
     }

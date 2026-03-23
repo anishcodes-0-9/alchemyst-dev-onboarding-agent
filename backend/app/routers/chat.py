@@ -1,3 +1,4 @@
+from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
@@ -15,24 +16,32 @@ async def chat(request: Request):
 
     session_id = body.get("sessionId")
     message = body.get("message")
+    language = body.get("language", "python")
 
-    # ✅ input validation
     if not message or not message.strip():
         return JSONResponse(
             status_code=400,
             content={"error": "message is required"}
         )
 
-    # ✅ session + agent
     session = get_or_create_session(session_id)
+
+    # sync language choice into session
+    session.integration.language = language
+
     agent = AgentLoop(session)
 
-    # ✅ SSE stream
     async def event_generator():
-        async for event_type, payload in agent.run(message):
+        try:
+            async for event_type, payload in agent.run(message):
+                yield {
+                    "event": event_type,
+                    "data": json.dumps(payload)
+                }
+        except Exception as e:
             yield {
-                "event": event_type,
-                "data": json.dumps(payload)
+                "event": "error",
+                "data": json.dumps({"message": str(e)})
             }
 
     return EventSourceResponse(event_generator())

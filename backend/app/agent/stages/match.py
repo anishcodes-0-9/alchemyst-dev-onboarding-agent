@@ -14,9 +14,18 @@ def resolve_feature(use_case: str | None) -> str | None:
     return None
 
 
-def resolve_stack(use_case: str | None) -> str:
-    # all use cases currently use fastapi as the base stack
-    return "fastapi"
+def resolve_stack(language: str | None, use_case: str | None) -> str:
+    """Return a meaningful stack label based on detected language + use case."""
+    lang = (language or "python").lower()
+    if lang == "python":
+        if use_case == "rag":
+            return "python / fastapi"
+        return "python / fastapi"
+    elif lang == "javascript":
+        return "node / express"
+    elif lang == "java":
+        return "java / spring boot"
+    return f"{lang}"
 
 
 def resolve_architecture(use_case: str | None, features: list) -> str:
@@ -38,7 +47,7 @@ async def run_match(session: SessionState):
     features = session.integration.features
 
     session.integration.feature = resolve_feature(use_case)
-    session.integration.stack = resolve_stack(use_case)
+    session.integration.stack = resolve_stack(session.integration.language, use_case)
     session.integration.architecture = resolve_architecture(use_case, features)
 
     session.stage = "generate"

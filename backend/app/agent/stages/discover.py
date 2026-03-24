@@ -108,10 +108,18 @@ async def run_discover(session: SessionState):
 
     # path 3: no new info and feature already set → no_op, skip to generate
     has_feature = session.integration.feature is not None
+    language_changed = False
+    # check if user is explicitly correcting the stack/language
+    msg_lower_check = last_user_message.lower()
+    if any(word in msg_lower_check for word in ["actually", "instead", "change", "use", "switch"]):
+        if any(kw in msg_lower_check for kw in STACK_KEYWORDS):
+            language_changed = True
+
     no_new_info = (
         has_feature
         and set(updated_features) == set(existing_features)
         and final_use_case == previous_use_case
+        and not language_changed
     )
 
     if has_structured or has_keyword:

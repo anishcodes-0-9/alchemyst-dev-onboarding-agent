@@ -17,6 +17,21 @@ const DEFAULT_INTEGRATION: IntegrationState = {
   no_op: false,
 };
 
+const STORAGE_KEY = "alchemyst_session_id";
+
+function getPersistedSessionId(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEY) || crypto.randomUUID();
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+function persistSessionId(id: string) {
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.setItem(STORAGE_KEY, id);
+  }
+}
+
 interface SessionStore {
   sessionId: string;
   messages: Message[];
@@ -27,7 +42,6 @@ interface SessionStore {
   generatedCode: string | null;
   codeLanguage: Language;
 
-  // actions
   setSessionId: (id: string) => void;
   addMessage: (msg: Message) => void;
   appendToken: (text: string) => void;
@@ -41,7 +55,7 @@ interface SessionStore {
 }
 
 export const useSessionStore = create<SessionStore>((set) => ({
-  sessionId: crypto.randomUUID(),
+  sessionId: getPersistedSessionId(),
   messages: [],
   isStreaming: false,
   stage: "discover",
@@ -50,7 +64,10 @@ export const useSessionStore = create<SessionStore>((set) => ({
   generatedCode: null,
   codeLanguage: "python",
 
-  setSessionId: (id) => set({ sessionId: id }),
+  setSessionId: (id) => {
+    persistSessionId(id);
+    set({ sessionId: id });
+  },
 
   addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
 
@@ -68,11 +85,8 @@ export const useSessionStore = create<SessionStore>((set) => ({
     }),
 
   setStreaming: (val) => set({ isStreaming: val }),
-
   setStage: (stage) => set({ stage }),
-
   setIntegration: (integration) => set({ integration }),
-
   setMemoryActive: (val) => set({ memoryActive: val }),
 
   setGeneratedCode: (code, language) =>
@@ -80,9 +94,11 @@ export const useSessionStore = create<SessionStore>((set) => ({
 
   setCodeLanguage: (language) => set({ codeLanguage: language }),
 
-  resetSession: () =>
+  resetSession: () => {
+    const newId = crypto.randomUUID();
+    persistSessionId(newId);
     set({
-      sessionId: crypto.randomUUID(),
+      sessionId: newId,
       messages: [],
       isStreaming: false,
       stage: "discover",
@@ -90,5 +106,6 @@ export const useSessionStore = create<SessionStore>((set) => ({
       memoryActive: false,
       generatedCode: null,
       codeLanguage: "python",
-    }),
+    });
+  },
 }));

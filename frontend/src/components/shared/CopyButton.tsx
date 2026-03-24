@@ -12,9 +12,13 @@ export function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+      className={`text-xs px-2.5 py-1 rounded-md border transition-all font-medium ${
+        copied
+          ? "border-teal-400 text-teal-600 bg-teal-50"
+          : "border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300"
+      }`}
     >
-      {copied ? "Copied!" : "Copy"}
+      {copied ? "✓ Copied" : "Copy"}
     </button>
   );
 }

@@ -1,21 +1,35 @@
-import { Spinner } from "../shared/Spinner";
 import type { Message } from "../../types/agent";
 
 export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
+      {!isUser && (
+        <div className="w-7 h-7 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold mr-2 mt-1 flex-shrink-0">
+          A
+        </div>
+      )}
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+        className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
           isUser
             ? "bg-purple-600 text-white rounded-br-sm"
             : "bg-gray-100 text-gray-800 rounded-bl-sm"
         }`}
       >
-        {message.content || (message.isStreaming ? <Spinner /> : "")}
-        {message.isStreaming && message.content && (
-          <span className="inline-block w-0.5 h-3.5 bg-gray-400 ml-0.5 animate-pulse align-middle" />
+        {message.content === "" && message.isStreaming ? (
+          <span className="flex items-center gap-1 py-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.3s]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.15s]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" />
+          </span>
+        ) : (
+          <>
+            <span className="whitespace-pre-wrap">{message.content}</span>
+            {message.isStreaming && (
+              <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
+            )}
+          </>
         )}
       </div>
     </div>

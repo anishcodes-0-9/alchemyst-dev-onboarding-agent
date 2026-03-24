@@ -15,6 +15,7 @@ export function useChat() {
     setIntegration,
     setMemoryActive,
     setGeneratedCode,
+    setCodeLanguage,
   } = useSessionStore();
 
   const sendMessage = useCallback(
@@ -39,6 +40,10 @@ export function useChat() {
             setStage(stage);
             setIntegration(integration);
             if (memoryActive !== undefined) setMemoryActive(memoryActive);
+            // sync language from backend integration state
+            if (integration.language) {
+              setCodeLanguage(integration.language);
+            }
           },
 
           onCode: (snippet, language) => {
@@ -94,6 +99,7 @@ export function useChat() {
       setIntegration,
       setMemoryActive,
       setGeneratedCode,
+      setCodeLanguage,
     ],
   );
 

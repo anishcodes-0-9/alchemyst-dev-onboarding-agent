@@ -1,7 +1,7 @@
 import { StatusDot } from "../shared/StatusDot";
 import type { IntegrationSlot } from "../../hooks/useIntegration";
 
-const featureLabels: Record<string, string> = {
+const displayLabels: Record<string, string> = {
   IntelliChat: "IntelliChat",
   ContextAPI: "Context API",
   ContextRouter: "Context Router",
@@ -9,11 +9,15 @@ const featureLabels: Record<string, string> = {
   python: "Python",
   javascript: "JavaScript",
   java: "Java",
+  chatbot: "Chatbot",
+  rag: "RAG pipeline",
+  agent: "Autonomous agent",
+  openai_replace: "OpenAI replacement",
 };
 
 export function CardSlot({ slot }: { slot: IntegrationSlot }) {
   const displayValue = slot.value
-    ? (featureLabels[slot.value] ?? slot.value)
+    ? (displayLabels[slot.value] ?? slot.value)
     : null;
 
   return (
@@ -22,7 +26,7 @@ export function CardSlot({ slot }: { slot: IntegrationSlot }) {
       <div className="flex-1 min-w-0">
         <p className="text-xs text-gray-400 mb-0.5">{slot.label}</p>
         {displayValue ? (
-          <p className="text-sm font-medium text-gray-800 capitalize truncate">
+          <p className="text-sm font-medium text-gray-800 truncate">
             {displayValue}
           </p>
         ) : (

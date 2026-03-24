@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CopyButton } from "../shared/CopyButton";
 import { LanguageTabs } from "./LanguageTabs";
 import { generateCode } from "../../services/api";
@@ -14,9 +14,16 @@ export function CodeBlock() {
     setCodeLanguage,
   } = useSessionStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<Language>(codeLanguage);
+
+  // sync active tab when codeLanguage changes in store (e.g. from backend)
+  useEffect(() => {
+    setActiveTab(codeLanguage);
+  }, [codeLanguage]);
 
   const handleLanguageChange = async (lang: Language) => {
-    if (lang === codeLanguage || isLoading) return;
+    if (lang === activeTab || isLoading) return;
+    setActiveTab(lang);
     setCodeLanguage(lang);
     setIsLoading(true);
     setGeneratedCode("", lang);
@@ -36,7 +43,7 @@ export function CodeBlock() {
     <div className="mt-4">
       <div className="flex items-center justify-between mb-2">
         <LanguageTabs
-          active={codeLanguage}
+          active={activeTab}
           onChange={handleLanguageChange}
           disabled={isLoading}
         />

@@ -71,6 +71,26 @@ async def run_discover(session: SessionState):
     final_use_case = session.integration.useCase
     session.integration.features = updated_features
 
+    # detect and set language from message keywords
+    msg_lower_lang = last_user_message.lower()
+    if any(kw in msg_lower_lang for kw in ["javascript", "js", "node", "express", "typescript"]):
+        session.integration.language = "javascript"
+    elif any(kw in msg_lower_lang for kw in ["java", "spring"]):
+        session.integration.language = "java"
+    elif "python" in msg_lower_lang or any(kw in msg_lower_lang for kw in ["fastapi", "flask", "django"]):
+        session.integration.language = "python"
+    # if no language keyword found, keep existing language
+
+    # also check structured extraction for stack
+    extracted_stack = extracted.get("stack", "").lower()
+    if extracted_stack:
+        if any(kw in extracted_stack for kw in ["javascript", "js", "node", "typescript"]):
+            session.integration.language = "javascript"
+        elif any(kw in extracted_stack for kw in ["java", "spring"]):
+            session.integration.language = "java"
+        elif any(kw in extracted_stack for kw in ["python", "fastapi", "flask", "django"]):
+            session.integration.language = "python"
+
     # ── TRANSITION LOGIC ──────────────────────────────────────────────────────
 
     # path 1: LLM output [EXTRACTED] with all three fields → advance to match

@@ -2,18 +2,29 @@ from __future__ import annotations
 from app.models.session import SessionState
 
 
-async def run_generate(session: SessionState):
-    if session.integration.no_op:
+async def run_generate(session: SessionState, requested_language: str | None = None):
+    # fallback for loop.py calls
+    if requested_language is None:
+        requested_language = session.integration.language
+
+    # no_op: only skip if same language
+    if (
+        session.integration.no_op and
+        session.integration.language == requested_language
+    ):
         yield (
             "code",
             {
                 "snippet": "# No changes needed. Feature already exists.",
-                "language": "text"
+                "language": session.integration.language
             }
         )
         session.stage = "done"
         yield ("done", {"sessionId": session.id})
         return
+
+    # update language before generation
+    session.integration.language = requested_language
 
     features = session.integration.features
     use_case = session.integration.useCase

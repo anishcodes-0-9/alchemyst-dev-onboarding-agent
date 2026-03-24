@@ -37,7 +37,7 @@ async def generate_code(request: Request):
 
     async def event_generator():
         try:
-            async for event_type, payload in run_generate(session):
+            async for event_type, payload in run_generate(session, language):
                 yield {
                     "event": event_type,
                     "data": json.dumps(payload)

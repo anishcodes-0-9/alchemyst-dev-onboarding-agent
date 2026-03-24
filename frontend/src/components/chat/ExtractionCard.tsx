@@ -26,6 +26,18 @@ const featureLabels: Record<string, { label: string; why: string }> = {
   },
 };
 
+// ✅ ADDED
+const stackLabels: Record<string, string> = {
+  fastapi: "FastAPI",
+  python: "Python",
+  javascript: "JavaScript",
+  java: "Java",
+  flask: "Flask",
+  django: "Django",
+  express: "Express",
+  spring: "Spring Boot",
+};
+
 export function ExtractionCard({ integration }: ExtractionCardProps) {
   if (!integration.useCase && !integration.feature) return null;
 
@@ -65,8 +77,9 @@ export function ExtractionCard({ integration }: ExtractionCardProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0" />
               <div>
                 <span className="text-xs text-gray-400">Stack</span>
-                <p className="text-sm font-medium text-gray-800 capitalize">
-                  {integration.stack}
+                {/* ✅ FIXED */}
+                <p className="text-sm font-medium text-gray-800">
+                  {stackLabels[integration.stack ?? ""] ?? integration.stack}
                 </p>
               </div>
             </div>

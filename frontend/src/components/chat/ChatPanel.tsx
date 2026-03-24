@@ -1,22 +1,14 @@
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
+import { StageIndicator } from "./StageIndicator";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useChat } from "../../hooks/useChat";
 import { Badge } from "../shared/Badge";
 
-const stageMessages: Record<string, string> = {
-  discover: "Discovering your problem...",
-  match: "Refining approach...",
-  generate: "Generating solution...",
-  done: "",
-};
-
 export function ChatPanel() {
-  const { messages, isStreaming, memoryActive, stage, resetSession } =
+  const { messages, isStreaming, memoryActive, resetSession } =
     useSessionStore();
   const { sendMessage } = useChat();
-
-  const statusText = isStreaming ? stageMessages[stage] : "";
 
   return (
     <div className="flex flex-col h-full bg-white border-r border-gray-100">
@@ -44,13 +36,8 @@ export function ChatPanel() {
         </div>
       </div>
 
-      {/* stage status bar */}
-      {statusText && (
-        <div className="px-4 py-1.5 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse flex-shrink-0" />
-          <p className="text-xs text-purple-600 font-medium">{statusText}</p>
-        </div>
-      )}
+      {/* stage indicator */}
+      <StageIndicator />
 
       {/* messages */}
       <MessageList messages={messages} />

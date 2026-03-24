@@ -19,6 +19,7 @@ async def run_generate(session: SessionState, requested_language: str | None = N
                 "language": session.integration.language
             }
         )
+        yield ("token", {"text": "You already have a working integration set up. Want me to help you deploy it or extend it with additional features?"})
         session.stage = "done"
         yield ("done", {"sessionId": session.id})
         return
@@ -299,6 +300,14 @@ public class AlchemystClient {
     final_code = "\n\n".join(code_parts)
 
     yield ("code", {"snippet": final_code, "language": language})
+
+    # completion message — emitted as a new assistant turn after the code
+    completion_text = (
+        f"You now have a working {language} starter integration "
+        f"for {feature or use_case}. "
+        f"Want me to help you deploy this or extend it with additional features?"
+    )
+    yield ("token", {"text": completion_text})
 
     session.stage = "done"
     yield ("done", {"sessionId": session.id})

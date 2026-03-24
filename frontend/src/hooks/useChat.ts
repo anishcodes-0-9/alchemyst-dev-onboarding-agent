@@ -40,7 +40,6 @@ export function useChat() {
             setStage(stage);
             setIntegration(integration);
             if (memoryActive !== undefined) setMemoryActive(memoryActive);
-            // sync language from backend integration state
             if (integration.language) {
               setCodeLanguage(integration.language);
             }
@@ -48,6 +47,27 @@ export function useChat() {
 
           onCode: (snippet, language) => {
             setGeneratedCode(snippet, language);
+
+            // Close the current assistant bubble, then open a fresh one
+            // so the completion message token has a live bubble to land in.
+            useSessionStore.setState((state) => {
+              const messages = [...state.messages];
+              const last = messages[messages.length - 1];
+              if (last?.role === "assistant") {
+                messages[messages.length - 1] = { ...last, isStreaming: false };
+              }
+              return {
+                messages: [
+                  ...messages,
+                  {
+                    id: uuidv4(),
+                    role: "assistant",
+                    content: "",
+                    isStreaming: true,
+                  },
+                ],
+              };
+            });
           },
 
           onDone: () => {
@@ -77,8 +97,7 @@ export function useChat() {
           },
         });
       } finally {
-        // CRITICAL: always unlock input when stream ends
-        // covers the case where agent stays in discover (no done event)
+        // always unlock input when stream ends
         useSessionStore.setState((state) => {
           const messages = [...state.messages];
           const last = messages[messages.length - 1];

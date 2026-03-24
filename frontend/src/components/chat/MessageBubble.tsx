@@ -1,7 +1,15 @@
 import type { Message } from "../../types/agent";
 
+function cleanContent(content: string): string {
+  // remove [EXTRACTED] block from displayed message
+  return content.replace(/\[EXTRACTED\][^\n]*/g, "").trim();
+}
+
 export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
+  const displayContent = isUser
+    ? message.content
+    : cleanContent(message.content);
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
@@ -17,7 +25,7 @@ export function MessageBubble({ message }: { message: Message }) {
             : "bg-gray-100 text-gray-800 rounded-bl-sm"
         }`}
       >
-        {message.content === "" && message.isStreaming ? (
+        {displayContent === "" && message.isStreaming ? (
           <span className="flex items-center gap-1 py-0.5">
             <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.3s]" />
             <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.15s]" />
@@ -25,8 +33,8 @@ export function MessageBubble({ message }: { message: Message }) {
           </span>
         ) : (
           <>
-            <span className="whitespace-pre-wrap">{message.content}</span>
-            {message.isStreaming && (
+            <span className="whitespace-pre-wrap">{displayContent}</span>
+            {message.isStreaming && displayContent && (
               <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
             )}
           </>

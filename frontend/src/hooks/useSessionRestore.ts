@@ -12,11 +12,11 @@ export function useSessionRestore() {
   } = useSessionStore();
 
   useEffect(() => {
-    // try to restore session state from backend on load
     getSession(sessionId)
       .then((res) => {
         const data = res.data;
-        if (data.stage) setStage(data.stage);
+        // only restore if session has actually progressed
+        if (data.stage && data.stage !== "discover") setStage(data.stage);
         if (data.integration) {
           setIntegration(data.integration);
           if (data.integration.language)
@@ -25,7 +25,8 @@ export function useSessionRestore() {
         if (data.memoryActive) setMemoryActive(data.memoryActive);
       })
       .catch(() => {
-        // session not found on backend — fresh start, no action needed
+        // fresh session — backend doesn't know it yet, that's fine
+        // no console error, no action needed
       });
   }, []);
 }

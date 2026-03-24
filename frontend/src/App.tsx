@@ -1,5 +1,5 @@
 import { AppLayout } from "./components/layout/AppLayout";
-import { useSessionRestore } from "./hooks/useSessionStore";
+import { useSessionRestore } from "./hooks/useSessionRestore";
 
 function App() {
   useSessionRestore();

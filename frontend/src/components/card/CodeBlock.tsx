@@ -17,17 +17,24 @@ export function CodeBlock() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Language>(codeLanguage);
   const [expanded, setExpanded] = useState(false);
+  // hold previous code so block stays visible during language switch
+  const [prevCode, setPrevCode] = useState<string>("");
 
   useEffect(() => {
     setActiveTab(codeLanguage);
   }, [codeLanguage]);
+
+  // keep prevCode in sync whenever generatedCode has real content
+  useEffect(() => {
+    if (generatedCode) setPrevCode(generatedCode);
+  }, [generatedCode]);
 
   const handleLanguageChange = async (lang: Language) => {
     if (lang === activeTab || isLoading) return;
     setActiveTab(lang);
     setCodeLanguage(lang);
     setIsLoading(true);
-    setGeneratedCode("", lang);
+    // do NOT clear generatedCode here — keep old code visible while loading
 
     await generateCode(
       sessionId,
@@ -38,12 +45,14 @@ export function CodeBlock() {
     );
   };
 
-  if (!generatedCode && !isLoading) return null;
+  // show block if: we have current code, previous code (loading), or are loading
+  const codeToDisplay = generatedCode || prevCode;
+  if (!codeToDisplay && !isLoading) return null;
 
   const displayCode =
-    !expanded && generatedCode && generatedCode.split("\n").length > 20
-      ? generatedCode.split("\n").slice(0, 20).join("\n") + "\n..."
-      : generatedCode;
+    !expanded && codeToDisplay && codeToDisplay.split("\n").length > 20
+      ? codeToDisplay.split("\n").slice(0, 20).join("\n") + "\n..."
+      : codeToDisplay;
 
   return (
     <div className="mt-4">
@@ -55,10 +64,10 @@ export function CodeBlock() {
           disabled={isLoading}
         />
         <div className="flex items-center gap-1.5">
-          {generatedCode && (
+          {codeToDisplay && (
             <>
-              <CopyButton text={generatedCode} />
-              <DownloadButton code={generatedCode} language={activeTab} />
+              <CopyButton text={codeToDisplay} />
+              <DownloadButton code={codeToDisplay} language={activeTab} />
             </>
           )}
         </div>
@@ -70,11 +79,18 @@ export function CodeBlock() {
       >
         <div className="overflow-x-auto overflow-y-auto max-h-full">
           {isLoading ? (
-            <div className="p-4 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              <p className="text-gray-500 text-xs font-mono">
-                Generating code...
-              </p>
+            <div className="relative">
+              {/* old code stays visible, dimmed */}
+              <pre className="text-green-400 text-xs font-mono leading-relaxed whitespace-pre-wrap p-4 opacity-30">
+                {displayCode}
+              </pre>
+              {/* loading overlay */}
+              <div className="absolute inset-0 flex items-start pt-4 pl-4 gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse mt-0.5 flex-shrink-0" />
+                <p className="text-gray-400 text-xs font-mono">
+                  Generating {activeTab} code...
+                </p>
+              </div>
             </div>
           ) : (
             <pre className="text-green-400 text-xs font-mono leading-relaxed whitespace-pre-wrap p-4">
@@ -85,7 +101,7 @@ export function CodeBlock() {
       </div>
 
       {/* expand/collapse toggle */}
-      {generatedCode && generatedCode.split("\n").length > 20 && (
+      {codeToDisplay && codeToDisplay.split("\n").length > 20 && (
         <button
           onClick={() => setExpanded(!expanded)}
           className="w-full mt-1 text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors"

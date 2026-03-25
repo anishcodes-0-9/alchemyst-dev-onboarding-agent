@@ -14,20 +14,22 @@ const useCaseLabels: Record<string, string> = {
 const featureLabels: Record<string, { label: string; why: string }> = {
   IntelliChat: {
     label: "IntelliChat",
-    why: "Best for conversational agents with built-in memory and streaming",
+    why: "Streaming chat with built-in memory — no message history management needed",
   },
   ContextAPI: {
     label: "Context API",
-    why: "Best for storing, searching and retrieving context across sessions",
+    why: "Semantic upload + retrieval across sessions — no vector DB required",
   },
   ContextRouter: {
     label: "Context Router",
-    why: "Drop-in OpenAI-compatible proxy — zero code changes required",
+    why: "Drop-in OpenAI proxy — two config lines to migrate, zero code changes",
   },
 };
 
-// ✅ ADDED
 const stackLabels: Record<string, string> = {
+  "python / fastapi": "Python / FastAPI",
+  "node / express": "Node.js / Express",
+  "java / spring boot": "Java / Spring Boot",
   fastapi: "FastAPI",
   python: "Python",
   javascript: "JavaScript",
@@ -37,6 +39,13 @@ const stackLabels: Record<string, string> = {
   express: "Express",
   spring: "Spring Boot",
 };
+
+const TAG_COLORS = [
+  "bg-purple-100 text-purple-700",
+  "bg-teal-100 text-teal-700",
+  "bg-blue-100 text-blue-700",
+  "bg-amber-100 text-amber-700",
+];
 
 export function ExtractionCard({ integration }: ExtractionCardProps) {
   if (!integration.useCase && !integration.feature) return null;
@@ -51,54 +60,50 @@ export function ExtractionCard({ integration }: ExtractionCardProps) {
         A
       </div>
       <div className="max-w-[78%] bg-white border border-purple-100 rounded-2xl rounded-bl-sm overflow-hidden shadow-sm">
-        {/* header */}
         <div className="bg-purple-50 px-4 py-2.5 border-b border-purple-100">
           <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">
             Understanding your project
           </p>
         </div>
 
-        {/* facts */}
-        <div className="px-4 py-3 space-y-2">
+        <div className="px-4 py-3 space-y-2.5">
           {integration.useCase && (
-            <div className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0" />
-              <div>
-                <span className="text-xs text-gray-400">Use case</span>
-                <p className="text-sm font-medium text-gray-800">
-                  {useCaseLabels[integration.useCase] ?? integration.useCase}
-                </p>
-              </div>
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">Use case</p>
+              <p className="text-sm font-medium text-gray-800">
+                {useCaseLabels[integration.useCase] ?? integration.useCase}
+              </p>
             </div>
           )}
 
           {integration.stack && (
-            <div className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0" />
-              <div>
-                <span className="text-xs text-gray-400">Stack</span>
-                {/* ✅ FIXED */}
-                <p className="text-sm font-medium text-gray-800">
-                  {stackLabels[integration.stack ?? ""] ?? integration.stack}
-                </p>
-              </div>
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">Stack</p>
+              <p className="text-sm font-medium text-gray-800">
+                {stackLabels[integration.stack] ?? integration.stack}
+              </p>
             </div>
           )}
 
           {integration.features.length > 0 && (
-            <div className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0" />
-              <div>
-                <span className="text-xs text-gray-400">Requirements</span>
-                <p className="text-sm font-medium text-gray-800 capitalize">
-                  {integration.features.join(", ")}
-                </p>
+            <div>
+              <p className="text-xs text-gray-400 mb-1.5">Requirements</p>
+              <div className="flex flex-wrap gap-1.5">
+                {integration.features.map((f, i) => (
+                  <span
+                    key={f}
+                    className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
+                      TAG_COLORS[i % TAG_COLORS.length]
+                    }`}
+                  >
+                    {f}
+                  </span>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* recommended feature */}
         {featureInfo && (
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
             <p className="text-xs text-gray-400 mb-1">Recommended feature</p>

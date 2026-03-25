@@ -13,11 +13,89 @@ STACK_KEYWORDS = [
 FALLBACK_USE_CASES = {"chatbot"}
 
 
+def _detect_language(text: str) -> str | None:
+    """Return canonical language string if a stack keyword is found in text."""
+    t = text.lower()
+    if any(kw in t for kw in ["javascript", "js", "node", "express", "typescript"]):
+        return "javascript"
+    if any(kw in t for kw in ["java", "spring"]):
+        return "java"
+    if any(kw in t for kw in ["python", "fastapi", "flask", "django"]):
+        return "python"
+    return None
+
+
 async def run_discover(session: SessionState):
+    last_user_message = session.history[-1]["content"]
+
+    # ── FAST PATH ────────────────────────────────────────────────────────────
+    # If we can extract all three fields from the current message + session
+    # state without asking the LLM, skip the LLM call entirely.
+    # This prevents Alex from asking a redundant question when all info is
+    # already present (e.g. "RAG pipeline in JavaScript, no memory between searches").
+    use_case_kw, features_kw = extract_use_case(last_user_message)
+    lang_kw = _detect_language(last_user_message)
+
+    # also check accumulated history for use case if current message only adds stack
+    prior_use_case = session.integration.useCase
+    resolved_use_case = use_case_kw if use_case_kw not in FALLBACK_USE_CASES else (prior_use_case or use_case_kw)
+
+    # fast-path condition: we have use case + language keyword right now
+    # (problem is implicitly "in message" — good enough to advance)
+    can_fast_path = bool(
+        resolved_use_case
+        and resolved_use_case not in FALLBACK_USE_CASES
+        and lang_kw
+    )
+    # also fast-path if previous turn already set use case and this message adds language
+    can_fast_path = can_fast_path or bool(prior_use_case and lang_kw)
+
+    if can_fast_path:
+        # update state without an LLM call
+        session.integration.useCase = resolved_use_case
+        session.integration.language = lang_kw
+        existing_features = session.integration.features.copy()
+        for f in features_kw:
+            if f not in existing_features:
+                existing_features.append(f)
+        session.integration.features = existing_features
+
+        # add a silent assistant turn so history stays consistent
+        session.history.append({
+            "role": "assistant",
+            "content": f"[EXTRACTED] use_case={resolved_use_case} stack={lang_kw} problem=context"
+        })
+
+        session.integration.no_op = False
+        session.integration.stack = None
+        session.integration.architecture = None
+        session.integration.feature = None
+        session.stage = "match"
+
+        await alchemyst.upload(
+            session.id,
+            {
+                "useCase": session.integration.useCase,
+                "features": session.integration.features,
+                "problem": last_user_message[:150],
+            }
+        )
+
+        yield (
+            "stage_update",
+            {
+                "stage": "match",
+                "integration": session.integration.model_dump(),
+                "memoryActive": session.memory_active,
+            }
+        )
+        return
+
+    # ── SLOW PATH: LLM call needed (missing stack or ambiguous use case) ─────
     # retrieve stored context from Alchemyst memory
     stored_context = await alchemyst.search(
         session.id,
-        session.history[-1]["content"]
+        last_user_message
     )
 
     # inject memory into system prompt if available
@@ -31,10 +109,45 @@ async def run_discover(session: SessionState):
         session.memory_active = True
 
     # stream LLM response token by token
+    # buffer tokens until we can confirm [EXTRACTED] is not starting
+    # once [EXTRACTED] appears, suppress everything from that point on
     full_response = ""
+    pending: list[str] = []   # tokens held while we check for [EXTRACTED]
+    TRIGGER = "[EXTRACTED]"
+    suppressing = False
+
     async for token in stream_chat(session.history, system):
         full_response += token
-        yield ("token", {"text": token})
+
+        if suppressing:
+            continue
+
+        pending.append(token)
+        window = "".join(pending)
+
+        if TRIGGER in window:
+            # emit everything before the trigger, then suppress the rest
+            before = window[: window.index(TRIGGER)]
+            if before.strip():
+                yield ("token", {"text": before})
+            suppressing = True
+            pending = []
+            continue
+
+        # if the window can't possibly be a prefix of TRIGGER, flush it
+        if not TRIGGER.startswith(window[-len(TRIGGER):]) and len(pending) > len(TRIGGER):
+            flush = "".join(pending)
+            yield ("token", {"text": flush})
+            pending = []
+        elif len(pending) > len(TRIGGER) * 2:
+            # safety valve — flush oldest tokens
+            flush = "".join(pending[: len(pending) - len(TRIGGER)])
+            yield ("token", {"text": flush})
+            pending = pending[len(pending) - len(TRIGGER):]
+
+    # flush anything remaining (if [EXTRACTED] never appeared)
+    if pending and not suppressing:
+        yield ("token", {"text": "".join(pending)})
 
     # add assistant turn to history
     session.history.append({
@@ -46,7 +159,7 @@ async def run_discover(session: SessionState):
     extracted = extract_structured(full_response)
 
     # fallback: keyword scan of the user's message
-    last_user_message = session.history[-2]["content"]
+    # (last_user_message defined at top of function)
     use_case_kw, features_kw = extract_use_case(last_user_message)
 
     previous_use_case = session.integration.useCase

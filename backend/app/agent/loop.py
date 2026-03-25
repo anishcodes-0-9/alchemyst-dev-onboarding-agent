@@ -10,30 +10,41 @@ class AgentLoop:
         self.session = session
 
     async def run(self, user_message: str):
-        # reset fully when re-entering after a completed session
+        # reset if session completed
         if self.session.stage == "done":
             self.session.stage = "discover"
             self.session.integration.no_op = False
             self.session.integration.feature = None
             self.session.integration.stack = None
             self.session.integration.architecture = None
+            self.session.integration.features = []
+
+        valid_stages = {"discover", "match", "generate", "done"}
+        if self.session.stage not in valid_stages:
+            self.session.stage = "discover"
 
         self.session.history.append({
             "role": "user",
             "content": user_message
         })
 
-        # discover always runs first
-        if self.session.stage == "discover":
-            async for e in run_discover(self.session):
-                yield e
+        current_stage = self.session.stage
 
-        # match runs only if discover advanced the stage
-        if self.session.stage == "match":
-            async for e in run_match(self.session):
-                yield e
+        while current_stage in ["discover", "match", "generate"]:
+            if current_stage == "discover":
+                async for e in run_discover(self.session):
+                    yield e
 
-        # generate runs if match advanced or no_op triggered
-        if self.session.stage == "generate":
-            async for e in run_generate(self.session):
-                yield e
+            elif current_stage == "match":
+                async for e in run_match(self.session):
+                    yield e
+
+            elif current_stage == "generate":
+                async for e in run_generate(self.session):
+                    yield e
+                break
+
+            if self.session.stage == current_stage:
+                break
+
+            current_stage = self.session.stage

@@ -3,8 +3,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 import json
+import asyncio
 
-from app.session_store import get_or_create_session
+from app.session_store import get_or_create_session, session_locks
 from app.agent.loop import AgentLoop
 
 router = APIRouter()
@@ -25,23 +26,24 @@ async def chat(request: Request):
         )
 
     session = get_or_create_session(session_id)
+    lock = session_locks[session.id]  #  get lock
 
-    # sync language choice into session
     session.integration.language = language
-
     agent = AgentLoop(session)
 
     async def event_generator():
-        try:
-            async for event_type, payload in agent.run(message):
+        async with lock:  #  critical fix
+            try:
+                async for event_type, payload in agent.run(message):
+                    yield {
+                        "event": event_type,
+                        "data": json.dumps(payload)
+                    }
+                    await asyncio.sleep(0)
+            except Exception as e:
                 yield {
-                    "event": event_type,
-                    "data": json.dumps(payload)
+                    "event": "error",
+                    "data": json.dumps({"message": str(e)})
                 }
-        except Exception as e:
-            yield {
-                "event": "error",
-                "data": json.dumps({"message": str(e)})
-            }
 
     return EventSourceResponse(event_generator())

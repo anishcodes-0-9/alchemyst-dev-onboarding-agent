@@ -3,70 +3,56 @@ from app.models.session import SessionState
 from app.services.llm import stream_chat
 
 
-GENERATE_PROMPT = """You are writing a {language} integration that calls Alchemyst AI's real HTTP API.
+GENERATE_PROMPT = """You are generating production-ready {language} code using the latest OpenAI Python SDK.
 
 Use case: {use_case}
 Feature: {feature}
 Problem: {problem}
 
-ALCHEMYST API — these are the REAL endpoints to call:
+STRICT REQUIREMENTS:
+- MUST use latest OpenAI SDK syntax
+- MUST use: from openai import OpenAI
+- MUST use: client.chat.completions.create(...)
+- MUST use model: "gpt-4o"
 
-IntelliChat (streaming chat with automatic session memory):
-  POST https://api.getalchemystai.com/v1/chat/completions
-  Header: Authorization: Bearer $ALCHEMYST_API_KEY
-  Body:   {{"model": "alchemyst-chat", "messages": [...], "stream": true, "user": "<session_id>"}}
-  The `user` field scopes memory to a session — Alchemyst injects prior context automatically.
-  Python: use AsyncOpenAI(base_url="https://api.getalchemystai.com/v1", api_key=os.environ["ALCHEMYST_API_KEY"])
-  JS:     use new OpenAI({{ apiKey: process.env.ALCHEMYST_API_KEY, baseURL: "https://api.getalchemystai.com/v1" }})
-  Java:   POST with OkHttp/WebClient to that URL, parse SSE lines
+- Streaming MUST follow EXACT pattern:
 
-ContextAPI (semantic storage + retrieval, no vector DB needed):
-  UPLOAD: POST https://api.getalchemystai.com/context/upload
-          Body: {{"userId": str, "content": str, "tags": ["<tag>"]}}
-  SEARCH: POST https://api.getalchemystai.com/context/search
-          Body: {{"userId": str, "query": str, "top_k": 5}}
-          Returns: [{{"content": str, "score": float}}]
-  Python: httpx.AsyncClient or requests. Header: Authorization: Bearer $ALCHEMYST_API_KEY
-  JS:     fetch() with Authorization header. Base: https://api.getalchemystai.com
-  Java:   RestTemplate or WebClient. Header: Bearer $ALCHEMYST_API_KEY
+for chunk in response:
+    if chunk.choices and chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")
 
-ContextRouter (drop-in OpenAI proxy — zero code changes beyond config):
-  Python: client = OpenAI(base_url="https://api.getalchemystai.com/v1", api_key=os.environ["ALCHEMYST_API_KEY"])
-  JS:     new OpenAI({{ apiKey: process.env.ALCHEMYST_API_KEY, baseURL: "https://api.getalchemystai.com/v1" }})
-  Java:   change base URL only in your client config
-  Show a commented BEFORE block (OpenAI config), then the AFTER (Alchemyst config), then a real call.
+- DO NOT use:
+  - dict-style access (chunk['choices'])
+  - openai.Chat.create
+  - openai.Completion.create
+  - text-davinci-003
+  - gpt-3.5-turbo
 
-STRICT RULES:
-- DO NOT define fake ContextAPI, IntelliChat, or ContextRouter classes — call the real HTTP endpoints above
-- Use OPENAI_API_KEY if you cannot use ALCHEMYST_API_KEY
-- 3-line comment block at top:
-    # What:    <one line describing what this code does for {use_case}>
-    # Feature: {feature}
-    # Solves:  <their specific problem in one line>
-- Use domain-fitting variable names (user_id, session_id, query, doc_content — NOT "example_user")
-- Complete end-to-end example showing actual upload + query (ContextAPI) or actual stream (IntelliChat/ContextRouter)
-- All secrets via os.environ / process.env
-- No TODOs, no ellipsis, no stub functions
+- Use OPENAI_API_KEY from environment
 - Max 60 lines
+- No markdown
+- No 
 
-Return ONLY the code. No markdown fences. No explanation text."""
+- For embeddings:
+  MUST use: client.embeddings.create(...)
+  MUST use model: "text-embedding-3-small"
+  DO NOT use openai.embeddings_utils
+
+Return ONLY code.
+"""
 
 
-NARRATIVE_PROMPT = """In 1-2 sentences, tell a developer why you chose a specific integration pattern for their use case.
-Be direct and specific — name the pattern, their stack, and the exact reason it fits their problem.
+NARRATIVE_PROMPT = """In 1-2 sentences, explain why this OpenAI-based approach fits the user's use case.
 
 Use case: {use_case}
-Feature chosen: {feature}
-Language/stack: {stack}
+Feature: {feature}
+Stack: {stack}
 Problem: {problem}
 
-Examples of good narrative (no quotes around them — output plain prose):
-- You're building a Python chatbot with session memory — IntelliChat is the right fit because it handles streaming and maintains conversation history natively, so you don't have to manage message arrays yourself.
-- For a RAG pipeline in Node.js, Context API gives you upload + semantic search out of the box — no vector database setup required.
-- Since you're replacing an existing OpenAI integration in Spring Boot, Context Router is the cleanest path — it's a drop-in proxy, so your existing code needs zero changes.
+Be specific and practical. No fluff.
 
-IMPORTANT: Do NOT wrap your response in quotation marks. Output plain prose only.
-Return ONLY the 1-2 sentence narrative. No intro, no sign-off, no code."""
+Return ONLY plain text. No quotes.
+"""
 
 
 async def run_generate(session: SessionState, requested_language: str | None = None):
@@ -93,7 +79,7 @@ async def run_generate(session: SessionState, requested_language: str | None = N
     session.integration.language = requested_language
 
     use_case = session.integration.useCase or "chatbot"
-    feature  = session.integration.feature or "IntelliChat"
+    feature  = session.integration.feature or "OpenAI Chat API"
     stack    = session.integration.stack or requested_language
     language = session.integration.language
 

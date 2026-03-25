@@ -151,6 +151,7 @@ async def run_discover(session: SessionState):
         "role": "assistant",
         "content": full_response
     })
+    assistant_asking_clarification = "?" in full_response.strip()
 
     extracted = extract_structured(full_response)
 
@@ -176,6 +177,11 @@ async def run_discover(session: SessionState):
     session.integration.features = updated_features
 
     msg_lower = last_user_message.lower()
+    strong_intent = bool(
+    use_case_kw
+    and session.integration.language
+    and any(word in msg_lower for word in ["build", "create", "generate", "make"])
+)
 
     if any(kw in msg_lower for kw in ["javascript", "js", "node", "express", "typescript"]):
         session.integration.language = "javascript"
@@ -216,7 +222,20 @@ async def run_discover(session: SessionState):
         and not language_changed
     )
 
-    if has_structured or has_keyword:
+    if strong_intent:
+    # user gave full intent → skip clarification
+        session.integration.no_op = False
+        session.integration.stack = None
+        session.integration.architecture = None
+        session.integration.feature = None
+        session.stage = "match"
+
+    elif assistant_asking_clarification:
+    # still figuring things out
+        session.integration.no_op = False
+        session.stage = "discover"
+
+    elif has_structured or has_keyword:
         session.integration.no_op = False
         session.integration.stack = None
         session.integration.architecture = None

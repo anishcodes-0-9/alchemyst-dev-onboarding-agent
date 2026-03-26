@@ -12,12 +12,15 @@ STACK_KEYWORDS = [
 
 FALLBACK_USE_CASES = {"chatbot"}
 
+# Use cases that are valid AI integration requests
+VALID_AI_USE_CASES = {"chatbot", "rag", "agent", "openai_replace", "backend"}
+
 
 def _detect_language(text: str) -> str | None:
     t = text.lower()
-    if any(kw in t for kw in ["javascript", "js", "node", "express", "typescript"]):
+    if any(kw in t for kw in ["javascript", " js ", "node", "express", "typescript"]):
         return "javascript"
-    if any(kw in t for kw in ["java", "spring"]):
+    if any(kw in t for kw in ["java ", "spring", " java"]) and "javascript" not in t:
         return "java"
     if any(kw in t for kw in ["python", "fastapi", "flask", "django"]):
         return "python"
@@ -26,38 +29,52 @@ def _detect_language(text: str) -> str | None:
 
 async def run_discover(session: SessionState):
     last_user_message = session.history[-1]["content"]
+    msg_lower = last_user_message.lower()
 
-    # ── NO-OP INTENT (generate directly) ─────────────────────────────────────
-    if last_user_message.lower().strip() in ["generate", "generate it", "go ahead", "build it"]:
-        session.integration.no_op = False
-        session.stage = "generate"
-
-        yield (
-            "stage_update",
-            {
-                "stage": "generate",
+    # ── SHORT-CIRCUIT ────────────────────────────
+    if msg_lower.strip() in ["generate", "generate it", "go ahead", "build it"]:
+        if session.integration.useCase and session.integration.language:
+            session.integration.no_op = False
+            session.stage = "match"
+            yield ("stage_update", {
+                "stage": "match",
                 "integration": session.integration.model_dump(),
                 "memoryActive": session.memory_active,
-            }
-        )
-        return
+            })
+            return
 
-    # ── FAST PATH ────────────────────────────────────────────────────────────
+    # ── KEYWORD EXTRACTION ───────────────────────
     use_case_kw, features_kw = extract_use_case(last_user_message)
     lang_kw = _detect_language(last_user_message)
 
     prior_use_case = session.integration.useCase
-    resolved_use_case = (
-        use_case_kw if use_case_kw not in FALLBACK_USE_CASES
-        else (prior_use_case or use_case_kw)
-    )
 
+    resolved_use_case = None
+
+    if use_case_kw and use_case_kw in VALID_AI_USE_CASES:
+        if use_case_kw not in FALLBACK_USE_CASES:
+            resolved_use_case = use_case_kw
+        elif prior_use_case:
+            resolved_use_case = prior_use_case
+    elif prior_use_case:
+        resolved_use_case = prior_use_case
+
+    # fallback BEFORE fast-path
+    if not resolved_use_case:
+        if "chatbot" in msg_lower:
+            resolved_use_case = "chatbot"
+        elif "rag" in msg_lower:
+            resolved_use_case = "rag"
+        elif "agent" in msg_lower:
+            resolved_use_case = "agent"
+        elif "api" in msg_lower or "backend" in msg_lower:
+            resolved_use_case = "backend"
+
+    # ── FAST PATH ────────────────────────────────
     can_fast_path = bool(
         resolved_use_case
         and resolved_use_case not in FALLBACK_USE_CASES
-        and lang_kw
     )
-    can_fast_path = can_fast_path or bool(prior_use_case and lang_kw)
 
     if can_fast_path:
         session.integration.useCase = resolved_use_case
@@ -80,30 +97,49 @@ async def run_discover(session: SessionState):
         session.integration.feature = None
         session.stage = "match"
 
-        await context_store.upload(
-            session.id,
-            {
-                "useCase": session.integration.useCase,
-                "features": session.integration.features,
-                "problem": last_user_message[:150],
-            }
-        )
+        await context_store.upload(session.id, {
+            "useCase": session.integration.useCase,
+            "features": session.integration.features,
+            "problem": last_user_message[:150],
+        })
 
-        yield (
-            "stage_update",
-            {
-                "stage": "match",
-                "integration": session.integration.model_dump(),
-                "memoryActive": session.memory_active,
-            }
-        )
+        yield ("stage_update", {
+            "stage": "match",
+            "integration": session.integration.model_dump(),
+            "memoryActive": session.memory_active,
+        })
         return
 
-    # ── SLOW PATH ────────────────────────────────────────────────────────────
-    stored_context = await context_store.search(
-        session.id,
-        last_user_message
-    )
+    # ✅ ONLY go to match if useCase is valid
+    if resolved_use_case:
+        session.integration.useCase = resolved_use_case
+
+        if lang_kw:
+            session.integration.language = lang_kw
+
+        session.integration.no_op = False
+        session.stage = "match"
+
+        yield ("stage_update", {
+            "stage": "match",
+            "integration": session.integration.model_dump(),
+            "memoryActive": session.memory_active,
+        })
+        return
+
+    # ❗ ignore meaningless / non-dev inputs → stay in discover
+    if not any(word in msg_lower for word in ["build", "create", "api", "chatbot", "agent", "rag"]):
+        session.stage = "discover"
+
+        yield ("stage_update", {
+            "stage": "discover",
+            "integration": session.integration.model_dump(),
+            "memoryActive": session.memory_active,
+        })
+        return
+
+    # ── SLOW PATH ────────────────────────────────
+    stored_context = await context_store.search(session.id, last_user_message)
 
     system = DISCOVER_SYSTEM_PROMPT
     if stored_context:
@@ -147,23 +183,21 @@ async def run_discover(session: SessionState):
     if pending and not suppressing:
         yield ("token", {"text": "".join(pending)})
 
-    session.history.append({
-        "role": "assistant",
-        "content": full_response
-    })
-    assistant_asking_clarification = "?" in full_response.strip()
+    session.history.append({"role": "assistant", "content": full_response})
 
+    # ── POST-LLM EXTRACTION ──────────────────────
     extracted = extract_structured(full_response)
-
     use_case_kw, features_kw = extract_use_case(last_user_message)
 
     previous_use_case = session.integration.useCase
     existing_features = session.integration.features.copy()
 
-    use_case = extracted.get("use_case") or use_case_kw
+    use_case = extracted.get("use_case") or (
+        use_case_kw if use_case_kw in VALID_AI_USE_CASES else None
+    )
     problem = extracted.get("problem")
 
-    if any(word in last_user_message.lower() for word in ["actually", "instead", "make it", "change to"]):
+    if any(word in msg_lower for word in ["actually", "instead", "make it", "change to"]):
         updated_features = features_kw
     else:
         updated_features = existing_features.copy()
@@ -171,33 +205,26 @@ async def run_discover(session: SessionState):
             if f not in updated_features:
                 updated_features.append(f)
 
-    if use_case not in FALLBACK_USE_CASES or session.integration.useCase is None:
-        session.integration.useCase = use_case
+    if use_case and use_case in VALID_AI_USE_CASES:
+        if use_case not in FALLBACK_USE_CASES or session.integration.useCase is None:
+            session.integration.useCase = use_case
 
     session.integration.features = updated_features
 
-    msg_lower = last_user_message.lower()
-    strong_intent = bool(
-    use_case_kw
-    and session.integration.language
-    and any(word in msg_lower for word in ["build", "create", "generate", "make"])
-)
-
-    if any(kw in msg_lower for kw in ["javascript", "js", "node", "express", "typescript"]):
-        session.integration.language = "javascript"
-    elif any(kw in msg_lower for kw in ["java", "spring"]):
-        session.integration.language = "java"
-    elif "python" in msg_lower or any(kw in msg_lower for kw in ["fastapi", "flask", "django"]):
-        session.integration.language = "python"
+    detected_lang = _detect_language(msg_lower)
+    if detected_lang:
+        session.integration.language = detected_lang
 
     extracted_stack = extracted.get("stack", "").lower()
     if extracted_stack:
-        if any(kw in extracted_stack for kw in ["javascript", "js", "node", "typescript"]):
-            session.integration.language = "javascript"
-        elif any(kw in extracted_stack for kw in ["java", "spring"]):
-            session.integration.language = "java"
-        elif any(kw in extracted_stack for kw in ["python", "fastapi", "flask", "django"]):
-            session.integration.language = "python"
+        stack_lang = _detect_language(extracted_stack)
+        if stack_lang:
+            session.integration.language = stack_lang
+
+    language_changed = False
+    if any(word in msg_lower for word in ["actually", "instead", "change", "use", "switch"]):
+        if any(kw in msg_lower for kw in STACK_KEYWORDS):
+            language_changed = True
 
     has_structured = bool(
         extracted.get("use_case")
@@ -206,15 +233,13 @@ async def run_discover(session: SessionState):
     )
 
     has_stack_keyword = any(kw in msg_lower for kw in STACK_KEYWORDS)
-    has_keyword = bool(use_case_kw and has_stack_keyword)
+    has_valid_use_case = bool(
+        use_case_kw and use_case_kw in VALID_AI_USE_CASES
+        and use_case_kw not in FALLBACK_USE_CASES
+    )
+    has_keyword = bool(has_valid_use_case and has_stack_keyword)
 
     has_feature = session.integration.feature is not None
-
-    language_changed = False
-    if any(word in msg_lower for word in ["actually", "instead", "change", "use", "switch"]):
-        if any(kw in msg_lower for kw in STACK_KEYWORDS):
-            language_changed = True
-
     no_new_info = (
         has_feature
         and set(updated_features) == set(existing_features)
@@ -222,20 +247,7 @@ async def run_discover(session: SessionState):
         and not language_changed
     )
 
-    if strong_intent:
-    # user gave full intent → skip clarification
-        session.integration.no_op = False
-        session.integration.stack = None
-        session.integration.architecture = None
-        session.integration.feature = None
-        session.stage = "match"
-
-    elif assistant_asking_clarification:
-    # still figuring things out
-        session.integration.no_op = False
-        session.stage = "discover"
-
-    elif has_structured or has_keyword:
+    if has_structured or has_keyword:
         session.integration.no_op = False
         session.integration.stack = None
         session.integration.architecture = None
@@ -246,24 +258,22 @@ async def run_discover(session: SessionState):
         session.integration.no_op = True
         session.stage = "generate"
 
+    elif any(word in msg_lower for word in ["add", "update", "change", "switch"]):
+        session.integration.no_op = False
+        session.stage = "generate"
+
     else:
         session.integration.no_op = False
         session.stage = "discover"
 
-    await context_store.upload(
-        session.id,
-        {
-            "useCase": session.integration.useCase,
-            "features": session.integration.features,
-            "problem": problem,
-        }
-    )
+    await context_store.upload(session.id, {
+        "useCase": session.integration.useCase,
+        "features": session.integration.features,
+        "problem": problem,
+    })
 
-    yield (
-        "stage_update",
-        {
-            "stage": session.stage,
-            "integration": session.integration.model_dump(),
-            "memoryActive": session.memory_active,
-        }
-    )
+    yield ("stage_update", {
+        "stage": session.stage,
+        "integration": session.integration.model_dump(),
+        "memoryActive": session.memory_active,
+    })

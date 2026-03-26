@@ -13,26 +13,29 @@ router = APIRouter()
 
 @router.post("/chat")
 async def chat(request: Request):
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "invalid JSON body"})
 
     session_id = body.get("sessionId")
     message = body.get("message")
     language = body.get("language", "python")
+    if not session_id:
+        return JSONResponse(status_code=400, content={"error": "sessionId is required"})
 
-    if not message or not message.strip():
-        return JSONResponse(
-            status_code=400,
-            content={"error": "message is required"}
-        )
+    if not message or not str(message).strip():
+        return JSONResponse(status_code=400, content={"error": "message is required"})
 
     session = get_or_create_session(session_id)
-    lock = session_locks[session.id]  #  get lock
+    lock = session_locks[session.id]
 
-    session.integration.language = language
+    if language in ("python", "javascript", "java"):
+        session.integration.language = language
     agent = AgentLoop(session)
 
     async def event_generator():
-        async with lock:  #  critical fix
+        async with lock:
             try:
                 async for event_type, payload in agent.run(message):
                     yield {

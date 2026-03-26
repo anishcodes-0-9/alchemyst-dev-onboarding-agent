@@ -7,7 +7,7 @@ import uuid
 class IntegrationState(BaseModel):
     useCase: Optional[str] = None
     stack: Optional[str] = None
-    feature: Optional[Literal["IntelliChat", "ContextAPI", "ContextRouter"]] = None
+    feature: Optional[str] = None          # loosened — match.py sets OpenAI feature names
     architecture: Optional[str] = None
     code: Optional[str] = None
     language: Literal["python", "javascript", "java"] = "python"

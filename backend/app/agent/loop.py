@@ -28,23 +28,34 @@ class AgentLoop:
             "content": user_message
         })
 
+        # -------- PRE-STAGE ROUTING (ADD THIS BLOCK) --------
+        message = user_message.lower()
+
+        # simple intent detection (keep it minimal)
+        is_build = any(word in message for word in ["build", "create", "design"])
+        has_target = any(word in message for word in ["api", "chatbot", "agent", "pipeline", "system", "app"])
+
         current_stage = self.session.stage
+        # -------- END BLOCK --------
 
         while current_stage in ["discover", "match", "generate"]:
             if current_stage == "discover":
                 async for e in run_discover(self.session):
                     yield e
 
+                # 🚨 STOP after discover (don’t loop again)
+                break
+
             elif current_stage == "match":
                 async for e in run_match(self.session):
                     yield e
+
+                # ensure next stage
+                current_stage = "generate"
+                self.session.stage = "generate"
+                continue
 
             elif current_stage == "generate":
                 async for e in run_generate(self.session):
                     yield e
                 break
-
-            if self.session.stage == current_stage:
-                break
-
-            current_stage = self.session.stage

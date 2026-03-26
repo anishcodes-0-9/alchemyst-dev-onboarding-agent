@@ -3,145 +3,186 @@ from app.models.session import SessionState
 from app.services.llm import stream_chat
 
 
-GENERATE_PROMPT = """You are generating production-ready {language} code using the latest OpenAI Python SDK.
+GENERATE_PROMPT = """You are a senior software engineer. Write complete, production-quality code.
 
+Language: {language}
 Use case: {use_case}
 Feature: {feature}
 Problem: {problem}
 
-STRICT REQUIREMENTS:
-- MUST use latest OpenAI SDK syntax
-- MUST use: from openai import OpenAI
-- MUST use: client.chat.completions.create(...)
-- MUST use model: "gpt-4o"
+STRICT RULE:
+- If use_case = backend:
+  DO NOT use OpenAI anywhere.
+  Build a standard backend API only.
 
-- Streaming MUST follow EXACT pattern:
+IMPORTANT:
+- If the use case is "backend" or "api":
+  - DO NOT use OpenAI
+  - Build a standard backend (REST API, controllers, routes, services)
 
-for chunk in response:
-    if chunk.choices and chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
+LANGUAGE RULES — these are absolute, no exceptions:
+- If language=python: use Python syntax only. Use FastAPI if backend.
+- If language=javascript: use Node.js/Express only.
+- If language=java: use Java with Spring Boot.
 
-- DO NOT use:
-  - dict-style access (chunk['choices'])
-  - openai.Chat.create
-  - openai.Completion.create
-  - text-davinci-003
-  - gpt-3.5-turbo
+APPLY THE FOLLOWING ONLY IF use_case IS chatbot, rag, or agent:
 
-- Use OPENAI_API_KEY from environment
-- Max 60 lines
-- No markdown
-- No 
+OPENAI SDK RULES:
+- Python: `client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])`
+- JavaScript: `const openai = new OpenAI({{ apiKey: process.env.OPENAI_API_KEY }})`
+- Java: Use RestTemplate or WebClient with Bearer token
 
-- For embeddings:
-  MUST use: client.embeddings.create(...)
-  MUST use model: "text-embedding-3-small"
-  DO NOT use openai.embeddings_utils
+FEATURE IMPLEMENTATION:
+- chatbot: maintain messages[] across turns
+- rag: implement simple document store + search
+- agent: implement basic tool loop
 
-Return ONLY code.
-"""
+CODE REQUIREMENTS:
+- First 3 lines: comments explaining what this does
+- No placeholders, no TODOs
+- Include main/example usage
+- Max 65 lines
+- NO markdown fences
+
+Return ONLY the code."""
 
 
-NARRATIVE_PROMPT = """In 1-2 sentences, explain why this OpenAI-based approach fits the user's use case.
+NARRATIVE_PROMPT = """Explain the system or backend approach for solving this problem.
+Do not mention OpenAI unless required.
 
 Use case: {use_case}
 Feature: {feature}
 Stack: {stack}
 Problem: {problem}
 
-Be specific and practical. No fluff.
+Return ONLY plain text."""
 
-Return ONLY plain text. No quotes.
-"""
+
+_STACK_LABELS = {
+    "python": "Python / FastAPI",
+    "javascript": "Node.js / Express",
+    "java": "Java / Spring Boot",
+}
 
 
 async def run_generate(session: SessionState, requested_language: str | None = None):
     if requested_language is None:
         requested_language = session.integration.language
 
-    # no_op: feature already set, same language requested
-    if (
-        session.integration.no_op and
-        session.integration.language == requested_language
-    ):
-        yield (
-            "code",
-            {
-                "snippet": "# Integration already configured — no changes needed.",
-                "language": session.integration.language,
-            }
-        )
-        yield ("token", {"text": "Your integration is already set up. Want me to help you deploy it or extend it?"})
+    # no_op path
+    if session.integration.no_op and session.integration.language == requested_language:
+        yield ("code", {
+            "snippet": "# Integration already configured — no changes needed.",
+            "language": session.integration.language,
+        })
+        yield ("token", {"text": "Your integration is already set up. Want help extending it?"})
         session.stage = "done"
         yield ("done", {"sessionId": session.id})
         return
 
-    session.integration.language = requested_language
+    # ✅ only set language if not already present
+    if not session.integration.language:
+        session.integration.language = requested_language
 
-    use_case = session.integration.useCase or "chatbot"
-    feature  = session.integration.feature or "OpenAI Chat API"
-    stack    = session.integration.stack or requested_language
-    language = session.integration.language
+    # ---------------- CORE LOGIC ----------------
 
-    # extract the clearest problem statement from conversation history
-    problem = "users lose context between sessions"
-    for msg in reversed(session.history):
-        if msg["role"] == "user" and len(msg["content"].strip()) > 20:
-            problem = msg["content"].strip()
-            break
+    language = session.integration.language or requested_language
+    problem = " ".join([
+    msg["content"] for msg in session.history[-3:]
+    if msg["role"] == "user"
+])
 
-    prompt = GENERATE_PROMPT.format(
-        use_case=use_case,
-        feature=feature,
-        stack=stack,
-        problem=problem,
-        language=language,
-    )
+    msg_lower = problem.lower()
 
-    # ── NARRATIVE (before code) ──────────────────────────────────────────────
-    # Derive a human-readable stack label from the actual language being generated.
-    # Do NOT use session.integration.stack here — it reflects the session's original
-    # language and will be wrong after a tab-switch (e.g. Python session → JS regen).
-    _stack_labels = {
-        "python": "Python / FastAPI",
-        "javascript": "Node.js / Express",
-        "java": "Java / Spring Boot",
-    }
-    narrative_stack = _stack_labels.get(language, stack)
+    # language override
+    # ONLY override if session has no language yet
+    # language override
+# ONLY override if user explicitly mentions language
+    if any(word in msg_lower for word in ["node", "javascript", "java", "python"]):
+        if "node" in msg_lower or "javascript" in msg_lower:
+            language = "javascript"
+        elif "java" in msg_lower:
+            language = "java"
+        elif "python" in msg_lower:
+            language = "python"
+
+    # stack AFTER language fix
+    stack = _STACK_LABELS.get(language, language)
+
+    # detect use case
+    use_case = session.integration.useCase
+    feature = session.integration.feature
+
+    if "rag" in msg_lower:
+        use_case = "rag"
+    elif "agent" in msg_lower:
+        use_case = "agent"
+    elif "chatbot" in msg_lower:
+        use_case = "chatbot"
+    elif "api" in msg_lower or "backend" in msg_lower:
+        use_case = "backend"
+        # ✅ LOCK use_case from session (prevents reset in multi-turn)
+    if session.integration.useCase:
+        use_case = session.integration.useCase
+
+    # fallback
+    if not use_case:
+        use_case = "backend"
+
+    if not feature:
+        feature = "standard API"
+
+    # ---------------- NARRATIVE ----------------
 
     narrative_prompt = NARRATIVE_PROMPT.format(
         use_case=use_case,
         feature=feature,
-        stack=narrative_stack,
+        stack=stack,
         problem=problem,
     )
-    narrative_parts = []
+
     async for token in stream_chat(
-        messages=[{"role": "user", "content": "Write the narrative now."}],
+        messages=[{"role": "user", "content": problem}],
         system_prompt=narrative_prompt,
         max_tokens=80,
     ):
-        narrative_parts.append(token)
         yield ("token", {"text": token})
 
-    # ── CODE ─────────────────────────────────────────────────────────────────
+    # ---------------- CODE ----------------
+
+    code_prompt = GENERATE_PROMPT.format(
+        language=language,
+        use_case=use_case,
+        feature=feature,
+        problem=problem,
+    )
+
     code_parts = []
     async for token in stream_chat(
-        messages=[{"role": "user", "content": "Write the integration code now."}],
-        system_prompt=prompt,
-        max_tokens=550,
+        messages=[{"role": "user", "content": problem}],
+        system_prompt=code_prompt,
+        max_tokens=600,
     ):
         code_parts.append(token)
 
-    # strip markdown fences if the LLM adds them despite instructions
     raw = "".join(code_parts).strip()
-    if raw.startswith("```"):
-        raw = "\n".join(raw.split("\n")[1:])
-    if raw.endswith("```"):
-        raw = "\n".join(raw.split("\n")[:-1])
-    final_code = raw.strip()
+
+    # strip markdown fences
+    lines = raw.split("\n")
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+
+    final_code = "\n".join(lines).strip()
 
     yield ("code", {"snippet": final_code, "language": language})
+
+    completion_text = (
+        f"You now have a working {language} solution for a {use_case}. "
+        f"Want help extending it or deploying it?"
+    )
+    yield ("token", {"text": completion_text})
 
     session.stage = "done"
     yield ("done", {"sessionId": session.id})

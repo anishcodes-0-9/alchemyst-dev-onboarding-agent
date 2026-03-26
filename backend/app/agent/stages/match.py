@@ -5,11 +5,13 @@ from app.models.session import SessionState
 def resolve_feature(use_case: str | None) -> str | None:
     if use_case == "chatbot":
         return "OpenAI Chat API"
-    elif use_case == "openai_replace":
-        return "OpenAI Compatible API"
     elif use_case in ["rag", "agent"]:
         return "OpenAI + Retrieval"
-    return "OpenAI Chat API"
+    elif use_case == "backend":
+        return "standard API"
+    elif use_case == "openai_replace":
+        return "OpenAI Compatible API"
+    return "standard API"
 
 
 def resolve_stack(language: str | None, use_case: str | None) -> str:
@@ -40,9 +42,9 @@ async def run_match(session: SessionState):
     use_case = session.integration.useCase
     features = session.integration.features
 
-    session.integration.feature = resolve_feature(use_case)
-    session.integration.stack = resolve_stack(session.integration.language, use_case)
-    session.integration.architecture = resolve_architecture(use_case, features)
+    session.integration.feature = None
+    session.integration.stack = None
+    session.integration.architecture = None
 
     session.stage = "generate"
 
